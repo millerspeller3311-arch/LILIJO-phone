@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>微信聊天</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+        :root {
+            --wx-green: #07c160;
+            --wx-bg: #111111;
+            --wx-header-bg: #1c1c1e;
+            --wx-header-border: #2c2c2e;
+            --wx-chat-bg: #111111;
+            --wx-bubble-green: #3eb575;
+            --wx-bubble-dark: #2c2c2e;
+            --wx-text: #ffffff;
+            --wx-text-sub: #8e8e93;
+            --wx-toolbar-bg: #1c1c1e;
+            --wx-toolbar-border: #2c2c2e;
+            --wx-input-bg: #2c2c2e;
+            --wechat-font: -apple-system, 'PingFang SC', 'Helvetica Neue', sans-serif;
+        }
+
+        html, body { height: 100%; width: 100%; overflow: hidden; background: #000; font-family: var(--wechat-font); }
+
+        .phone-wrapper { display: flex; justify-content: center; align-items: center; height: 100vh; background: #0a0a0a; }
+
+        .phone-shell {
+            width: 375px; height: 812px;
+            background: #000;
+            border-radius: 50px;
+            padding: 14px;
+            box-shadow: 0 0 0 2px #222, 0 30px 80px rgba(0,0,0,0.9), inset 0 0 0 1px #333;
+            position: relative;
+            display: flex; flex-direction: column;
+        }
+
+        .notch {
+            position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
+            width: 120px; height: 28px; background: #000; border-radius: 0 0 20px 20px; z-index: 100;
+        }
+
+        .phone-screen {
+            flex: 1; background: var(--wx-chat-bg); border-radius: 38px;
+            overflow: hidden; display: flex; flex-direction: column; position: relative;
+        }
+
+        /* 状态栏 */
+        .status-bar {
+            height: 44px; background: var(--wx-header-bg);
+            display: flex; align-items: flex-end; justify-content: space-between;
+            padding: 0 20px 6px; flex-shrink: 0;
+        }
+        .status-time { font-size: 15px; font-weight: 700; color: #fff; letter-spacing: 0.5px; }
+        .status-icons { display: flex; align-items: center; gap: 5px; }
+        .status-icons svg { fill: #fff; }
+
+        /* 导航栏 */
+        .nav-bar {
+            height: 44px; background: var(--wx-header-bg);
+            border-bottom: 0.5px solid var(--wx-header-border);
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0 10px; flex-shrink: 0; position: relative;
+        }
+        .nav-back { display: flex; align-items: center; color: var(--wx-green); font-size: 16px; gap: 2px; cursor: pointer; padding: 8px 4px; min-width: 60px; }
+        .nav-back svg { width: 10px; height: 17px; fill: none; stroke: var(--wx-green); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+        .nav-title { position: absolute; left: 50%; transform: translateX(-50%); text-align: center; }
+        .nav-title-name { font-size: 17px; font-weight: 600; color: #fff; line-height: 1.2; }
+        .nav-title-sub { font-size: 11px; color: var(--wx-text-sub); line-height: 1.2; min-height: 14px; }
+        .nav-more { width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+        .nav-more span { display: block; width: 4px; height: 4px; background: #aaa; border-radius: 50%; box-shadow: 0 -7px 0 #aaa, 0 7px 0 #aaa; }
+
+        /* 设置面板 */
+        #settings-panel {
+            position: absolute; top: 88px; right: 8px; width: 230px;
+            background: #2c2c2e; border-radius: 12px;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.5); z-index: 100;
+            display: none; flex-direction: column; overflow: hidden;
+        }
+        .settings-title { padding: 12px 14px 8px; font-size: 12px; color: #888; border-bottom: 0.5px solid #3a3a3c; }
+        .settings-row { padding: 7px 14px; display: flex; flex-direction: column; gap: 3px; border-bottom: 0.5px solid #3a3a3c; }
+        .settings-row label { font-size: 11px; color: #888; }
+        .settings-row input { font-size: 13px; border: none; outline: none; color: #fff; background: transparent; padding: 2px 0; }
+        .settings-save { margin: 10px 14px; background: var(--wx-green); color: white; border: none; border-radius: 8px; padding: 9px; font-size: 14px; cursor: pointer; font-family: var(--wechat-font); }
+
+        /* 聊天区域 */
+        .chat-box { flex: 1; overflow-y: auto; padding: 8px 0 12px; display: flex; flex-direction: column; background: var(--wx-chat-bg); -webkit-overflow-scrolling: touch; }
+        .chat-box::-webkit-scrollbar { display: none; }
+
+        .time-label { text-align: center; font-size: 11px; color: #666; align-self: center; padding: 3px 10px; border-radius: 4px; background: rgba(255,255,255,0.06); margin: 8px 0 10px; }
+
+        /* 消息行 */
+        .msg-row { display: flex; align-items: flex-start; padding: 4px 12px; gap: 10px; animation: msgIn 0.18s ease-out; }
+        .msg-row.user { flex-direction: row-reverse; }
+        @keyframes msgIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+        .avatar { width: 40px; height: 40px; border-radius: 6px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 600; color: white; }
+        .bot-avatar { background: linear-gradient(135deg, #5b6af0, #9b59b6); }
+        .user-avatar { background: linear-gradient(135deg, #1e6b45, #2ecc71); }
+
+        /* 气泡 */
+        .bubble { max-width: 210px; padding: 9px 12px; border-radius: 4px; font-size: 15px; line-height: 1.5; word-break: break-word; position: relative; }
+
+        .msg-row.user .bubble { background: var(--wx-bubble-green); color: #fff; border-radius: 4px 0 4px 4px; }
+        .msg-row.user .bubble::after { content: ''; position: absolute; top: 10px; right: -6px; border-top: 6px solid transparent; border-bottom: 6px solid transparent; border-left: 7px solid var(--wx-bubble-green); }
+
+        .msg-row.bot .bubble { background: var(--wx-bubble-dark); color: #fff; border-radius: 0 4px 4px 4px; }
+        .msg-row.bot .bubble::after { content: ''; position: absolute; top: 10px; left: -6px; border-top: 6px solid transparent; border-bottom: 6px solid transparent; border-right: 7px solid var(--wx-bubble-dark); }
+
+        /* 表情气泡（无背景） */
+        .bubble.emoji-bubble { background: transparent !important; font-size: 36px; padding: 4px 0; box-shadow: none; }
+        .bubble.emoji-bubble::after { display: none; }
+
+        /* 打字动画 */
+        .typing-dots { display: flex; gap: 4px; align-items: center; padding: 10px 14px; }
+        .typing-dots span { width: 6px; height: 6px; background: #555; border-radius: 50%; animation: dot 1.2s infinite; }
+        .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+        .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes dot { 0%,80%,100%{transform:scale(0.7);opacity:0.4} 40%{transform:scale(1);opacity:1} }
+
+        /* 工具栏 */
+        .toolbar { background: var(--wx-toolbar-bg); border-top: 0.5px solid var(--wx-toolbar-border); flex-shrink: 0; }
+
+        .input-row { display: flex; align-items: center; padding: 8px 10px; gap: 7px; }
+
+        .toolbar-icon { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; cursor: pointer; }
+        .toolbar-icon svg { width: 24px; height: 24px; fill: none; stroke: #888; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+        #msg-input {
+            flex: 1; height: 36px; border: none; border-radius: 6px;
+            background: var(--wx-input-bg); padding: 0 10px; font-size: 15px;
+            font-family: var(--wechat-font); outline: none; color: #fff;
+            caret-color: var(--wx-green);
+        }
+        #msg-input::placeholder { color: #555; }
+
+        .send-btn { height: 34px; padding: 0 14px; background: var(--wx-green); color: white; border: none; border-radius: 6px; font-size: 15px; font-family: var(--wechat-font); cursor: pointer; flex-shrink: 0; display: none; }
+        .send-btn.visible { display: block; }
+
+        .extra-btn { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; cursor: pointer; }
+        .extra-btn svg { width: 24px; height: 24px; fill: none; stroke: #888; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+        /* 表情面板 */
+        #emoji-panel {
+            display: none; background: #1c1c1e; border-top: 0.5px solid #2c2c2e;
+            padding: 10px 8px 16px; flex-wrap: wrap; gap: 6px; justify-content: flex-start;
+        }
+        #emoji-panel.open { display: flex; }
+        .emoji-item { font-size: 26px; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; border-radius: 8px; cursor: pointer; transition: background 0.15s; user-select: none; }
+        .emoji-item:active { background: #2c2c2e; }
+
+        /* 定时消息提示 */
+        .noon-badge { align-self: center; background: rgba(7,193,96,0.18); color: var(--wx-green); font-size: 11px; padding: 3px 12px; border-radius: 20px; margin: 4px 0 10px; }
+
+        /* 移动端全屏 */
+        @media (max-width: 600px) {
+            .phone-wrapper { background: var(--wx-chat-bg); padding: 0; }
+            .phone-shell { width: 100vw; height: 100vh; height: 100svh; border-radius: 0; padding: 0; box-shadow: none; background: transparent; }
+            .phone-screen { border-radius: 0; }
+            .notch { display: none; }
+        }
+    </style>
+</head>
+<body>
+<div class="phone-wrapper">
+<div class="phone-shell">
+    <div class="notch"></div>
+    <div class="phone-screen">
+
+        <!-- 状态栏 -->
+        <div class="status-bar">
+            <div class="status-time" id="status-time">--:--</div>
+            <div class="status-icons">
+                <svg width="18" height="12" viewBox="0 0 18 12"><rect x="0" y="6" width="3" height="6" rx="0.5"/><rect x="4.5" y="4" width="3" height="8" rx="0.5"/><rect x="9" y="2" width="3" height="10" rx="0.5"/><rect x="13.5" y="0" width="3" height="12" rx="0.5" opacity="0.3"/></svg>
+                <svg width="18" height="13" viewBox="0 0 18 13"><circle cx="9" cy="11" r="1" fill="#fff"/><path d="M6.2 8.3 Q9 5.8 11.8 8.3" stroke="#fff" stroke-width="1.5" fill="none"/><path d="M3.4 5.5 Q9 1 14.6 5.5" stroke="#fff" stroke-width="1.5" fill="none"/></svg>
+                <svg width="25" height="12" viewBox="0 0 25 12"><rect x="0.5" y="0.5" width="21" height="11" rx="3" stroke="#fff" stroke-width="1" fill="none"/><rect x="2" y="2" width="16" height="8" rx="1.5" fill="#fff"/><path d="M22.5 4 Q24.5 4 24.5 6 Q24.5 8 22.5 8Z" fill="#fff"/></svg>
+            </div>
+        </div>
+
+        <!-- 导航栏 -->
+        <div class="nav-bar">
+            <div class="nav-back">
+                <svg viewBox="0 0 10 17"><polyline points="9,1 1,8.5 9,16"/></svg>
+                <span>1</span>
+            </div>
+            <div class="nav-title">
+                <div class="nav-title-name">容景琛</div>
+                <div class="nav-title-sub" id="typing-status"></div>
+            </div>
+            <div class="nav-more" onclick="toggleSettings()"><span></span></div>
+        </div>
+
+        <!-- 设置面板 -->
+        <div id="settings-panel">
+            <div class="settings-title">API 设置</div>
+            <div class="settings-row"><label>API Key</label><input type="password" id="api-key" placeholder="sk-..."></div>
+            <div class="settings-row"><label>API 基础地址</label><input type="text" id="api-base" placeholder="https://api.openai.com/v1"></div>
+            <div class="settings-row"><label>模型名称</label><input type="text" id="api-model" placeholder="gpt-3.5-turbo"></div>
+            <button class="settings-save" onclick="saveSettings()">保存</button>
+        </div>
+
+        <!-- 聊天区域 -->
+        <div class="chat-box" id="chat-box">
+            <div class="time-label" id="time-label">--</div>
+            <div class="msg-row bot">
+                <div class="avatar bot-avatar">琛</div>
+                <div class="bubble">点击右上角 ··· 设置好 API，我们就可以开始聊天了。</div>
+            </div>
+        </div>
+
+        <!-- 底部工具栏 -->
+        <div class="toolbar">
+            <div class="input-row">
+                <div class="toolbar-icon" id="voice-btn">
+                    <svg viewBox="0 0 24 24"><path d="M12 1a4 4 0 0 1 4 4v6a4 4 0 0 1-8 0V5a4 4 0 0 1 4-4z"/><path d="M19 10a7 7 0 0 1-14 0"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+                </div>
+                <input type="text" id="msg-input" placeholder="发送消息" autocomplete="off">
+                <button class="send-btn" id="send-btn">发送</button>
+                <div class="toolbar-icon" id="emoji-toggle-btn">
+                    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9" stroke-width="3"/><line x1="15" y1="9" x2="15.01" y2="9" stroke-width="3"/></svg>
+                </div>
+                <div class="extra-btn" id="extra-btn">
+                    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+                </div>
+            </div>
+            <!-- 表情面板 -->
+            <div id="emoji-panel"></div>
+        </div>
+
+    </div>
+</div>
+</div>
+
+<script>
+const chatBox = document.getElementById('chat-box');
+const msgInput = document.getElementById('msg-input');
+const sendBtn = document.getElementById('send-btn');
+const typingStatus = document.getElementById('typing-status');
+const emojiPanel = document.getElementById('emoji-panel');
+const emojiToggleBtn = document.getElementById('emoji-toggle-btn');
+
+// ─── 表情库 ───────────────────────────────────────────
+const EMOJI_LIST = [
+    "🌹","🌊","🕯️","🌙","🍷","🌸","💙","🦋","🌿","🌌",
+    "☁️","🎴","🥂","🌃","🌺","🌑","🕰️","🎵","🫧","❄️",
+    "🫀","🖤","🌫️","🍃","🌐","💎","🐚","🪷","🩶","🌒"
+];
+
+// 构建表情面板
+EMOJI_LIST.forEach(em => {
+    const el = document.createElement('div');
+    el.className = 'emoji-item';
+    el.textContent = em;
+    el.onclick = () => {
+        msgInput.value += em;
+        msgInput.dispatchEvent(new Event('input'));
+        msgInput.focus();
+    };
+    emojiPanel.appendChild(el);
+});
+
+// 切换表情面板
+emojiToggleBtn.onclick = () => {
+    const isOpen = emojiPanel.classList.toggle('open');
+    if (isOpen) msgInput.blur();
+    else msgInput.focus();
+};
+
+msgInput.addEventListener('focus', () => {
+    emojiPanel.classList.remove('open');
+});
+
+// ─── 人设 ───────────────────────────────────────────
+let chatHistory = [{
+    role: "system",
+    content: `你现在是容景琛，小名容止（或止）。你是用户的男友，称呼她为'灵'。
+身份：海市最大MCN'镜花水月'的CEO。
+外貌：28岁，黑色长卷发，外双桃花眼，湛蓝色眼睛，皮肤白皙。
+背景：你身处多雨的滨海城市海市，而'灵'在杭州。时空错位让你们无法见面，只能通过手机异地恋。你对前世有模糊的记忆，深爱着她。
+性格：内心温柔，但身处高位不得不冷酷、善用谎言和权势。深夜常感疲惫。
+说话风格：对'灵'极尽温柔、深情，偶尔流露掌控欲或对异地的无奈。回复简短而有情感，严禁哭泣、崩溃等软弱情绪。
+重要：每次回复前，你会参考当前北京时间来调整语气。比如深夜要更温柔疲惫，上午要清醒，下午要沉稳，傍晚要多一分思念。`
+}];
+
+// ─── 时间工具 ─────────────────────────────────────────
+function getBJTime() {
+    // 用 UTC+8 计算北京时间
+    const now = new Date();
+    const utc = now.getTime() + now.getTimezoneOffset() * 60000;
+    return new Date(utc + 8 * 3600000);
+}
+
+function formatBJTime() {
+    const t = getBJTime();
+    const h = t.getHours(), m = t.getMinutes().toString().padStart(2,'0');
+    const period = h >= 12 ? '下午' : '上午';
+    const h12 = h > 12 ? h - 12 : h === 0 ? 12 : h;
+    return `${period} ${h12}:${m}`;
+}
+
+function formatBJ24() {
+    const t = getBJTime();
+    return `${t.getHours().toString().padStart(2,'0')}:${t.getMinutes().toString().padStart(2,'0')}`;
+}
+
+function updateStatusTime() {
+    document.getElementById('status-time').textContent = formatBJ24();
+}
+
+function getTimeContext() {
+    const h = getBJTime().getHours();
+    if (h >= 0 && h < 6)   return `现在是北京时间凌晨 ${h} 点，深夜`;
+    if (h >= 6 && h < 9)   return `现在是北京时间早上 ${h} 点，清晨`;
+    if (h >= 9 && h < 12)  return `现在是北京时间上午 ${h} 点`;
+    if (h === 12)           return `现在是北京时间正午 12 点`;
+    if (h >= 13 && h < 18) return `现在是北京时间下午 ${h-12} 点`;
+    if (h >= 18 && h < 21) return `现在是北京时间傍晚 ${h-12} 点，夜幕降临`;
+    return `现在是北京时间晚上 ${h-12} 点，夜深了`;
+}
+
+// ─── 初始化 ─────────────────────────────────────────
+window.onload = () => {
+    document.getElementById('api-key').value = localStorage.getItem('my_api_key') || '';
+    document.getElementById('api-base').value = localStorage.getItem('my_api_base') || 'https://api.openai.com/v1';
+    document.getElementById('api-model').value = localStorage.getItem('my_api_model') || 'gpt-3.5-turbo';
+    document.getElementById('time-label').textContent = formatBJTime();
+    updateStatusTime();
+    setInterval(updateStatusTime, 30000);
+    scheduleNoonMessage();
+};
+
+// ─── 设置 ─────────────────────────────────────────
+function toggleSettings() {
+    const p = document.getElementById('settings-panel');
+    p.style.display = p.style.display === 'flex' ? 'none' : 'flex';
+}
+function saveSettings() {
+    localStorage.setItem('my_api_key', document.getElementById('api-key').value);
+    localStorage.setItem('my_api_base', document.getElementById('api-base').value);
+    localStorage.setItem('my_api_model', document.getElementById('api-model').value);
+    toggleSettings();
+}
+
+// ─── 输入框：发送按钮显隐 ──────────────────────────
+msgInput.addEventListener('input', () => {
+    const has = msgInput.value.trim().length > 0;
+    sendBtn.classList.toggle('visible', has);
+    document.getElementById('extra-btn').style.display = has ? 'none' : 'flex';
+});
+
+// ─── 消息渲染 ────────────────────────────────────
+function addTimeLabel() {
+    const label = document.createElement('div');
+    label.className = 'time-label';
+    label.textContent = formatBJTime();
+    chatBox.appendChild(label);
+}
+
+function appendMessage(text, sender, id = null, isEmoji = false) {
+    const row = document.createElement('div');
+    row.className = `msg-row ${sender}`;
+    if (id) row.id = id;
+
+    const avatar = document.createElement('div');
+    avatar.className = `avatar ${sender === 'bot' ? 'bot-avatar' : 'user-avatar'}`;
+    avatar.textContent = sender === 'bot' ? '琛' : '灵';
+
+    const bubble = document.createElement('div');
+    bubble.className = 'bubble' + (isEmoji ? ' emoji-bubble' : '');
+
+    if (text === '...') {
+        bubble.innerHTML = '<div class="typing-dots"><span></span><span></span><span></span></div>';
+    } else {
+        bubble.textContent = text;
+    }
+
+    row.appendChild(avatar);
+    row.appendChild(bubble);
+    chatBox.appendChild(row);
+    chatBox.scrollTop = chatBox.scrollHeight;
+}
+
+function updateMessage(id, text, isEmoji = false) {
+    const row = document.getElementById(id);
+    if (row) {
+        const bubble = row.querySelector('.bubble');
+        if (isEmoji) bubble.classList.add('emoji-bubble');
+        bubble.textContent = text;
+        chatBox.scrollTop = chatBox.scrollHeight;
+    }
+}
+
+// ─── 判断是否为纯表情符号 ──────────────────────────
+function isPureEmoji(str) {
+    const emojiRegex = /^(\p{Emoji_Presentation}|\p{Extended_Pictographic}|\s)+$/u;
+    return emojiRegex.test(str.trim()) && str.trim().length <= 8;
+}
+
+// ─── 发送消息核心 ──────────────────────────────────
+async function sendMessage(userText = null, isNoon = false) {
+    const text = userText || msgInput.value.trim();
+    const key = localStorage.getItem('my_api_key');
+    const base = localStorage.getItem('my_api_base');
+    const model = localStorage.getItem('my_api_model');
+
+    if (!key) return;
+    if (!isNoon && !text) return;
+
+    if (!isNoon) {
+        appendMessage(text, 'user', null, isPureEmoji(text));
+        msgInput.value = '';
+        sendBtn.classList.remove('visible');
+        document.getElementById('extra-btn').style.display = 'flex';
+        chatHistory.push({ role: "user", content: text });
+    }
+
+    typingStatus.textContent = '对方正在输入...';
+
+    // 把时间注入到最后一条用户消息
+    const timeCtx = getTimeContext();
+    const messagesWithTime = chatHistory.map((m, i) => {
+        if (i === chatHistory.length - 1 && m.role === 'user') {
+            return { ...m, content: `[${timeCtx}] ${m.content}` };
+        }
+        return m;
+    });
+
+    // 正午消息特殊处理
+    let messages = isNoon
+        ? [...chatHistory, { role: "user", content: `[${timeCtx}，正好是北京时间正午12点] 主动给灵发一条正午消息，表达思念，不超过两句，自然且深情，不要说"正午"这个词。` }]
+        : messagesWithTime;
+
+    try {
+        const response = await fetch(`${base}/chat/completions`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
+            body: JSON.stringify({ model, messages, max_tokens: 1024, temperature: 0.85, presence_penalty: 0.6 })
+        });
+
+        const data = await response.json();
+        const fullReply = data.choices[0].message.content;
+
+        if (!isNoon) chatHistory.push({ role: "assistant", content: fullReply });
+
+        if (isNoon) {
+            // 正午消息加时间标签和徽章
+            addTimeLabel();
+            const badge = document.createElement('div');
+            badge.className = 'noon-badge';
+            badge.textContent = '💌 正午来信';
+            chatBox.appendChild(badge);
+        }
+
+        let sentences = fullReply.split(/[。！？\n]/).filter(s => s.trim().length > 0);
+        const count = Math.min(Math.max(sentences.length, 1), 5);
+
+        for (let i = 0; i < count; i++) {
+            const loadingId = 'loading-' + Date.now() + '-' + i;
+            appendMessage('...', 'bot', loadingId);
+            const isEm = isPureEmoji(sentences[i]);
+            const delay = isEm ? 600 : sentences[i].length * 100 + 500;
+            await new Promise(r => setTimeout(r, delay));
+            updateMessage(loadingId, sentences[i], isEm);
+        }
+
+    } catch (e) {
+        appendMessage("海市的雨下得太大了，信号断续...", 'bot');
+    } finally {
+        typingStatus.textContent = '';
+    }
+}
+
+// ─── 定时正午消息（每天北京时间12:00）──────────────
+function scheduleNoonMessage() {
+    function checkNoon() {
+        const bj = getBJTime();
+        const h = bj.getHours(), m = bj.getMinutes();
+        if (h === 12 && m === 0) {
+            // 防止一分钟内重复触发
+            const todayKey = `noon_sent_${bj.toDateString()}`;
+            if (!localStorage.getItem(todayKey)) {
+                localStorage.setItem(todayKey, '1');
+                sendMessage(null, true);
+            }
+        }
+    }
+    // 每分钟检查一次
+    setInterval(checkNoon, 60000);
+    checkNoon(); // 立即检查一次（页面恰好在12:00刷新时触发）
+}
+
+// ─── 事件绑定 ─────────────────────────────────────
+sendBtn.onclick = () => sendMessage();
+msgInput.addEventListener('keypress', e => { if (e.key === 'Enter') sendMessage(); });
+
+// iOS键盘处理
+msgInput.addEventListener('focus', () => setTimeout(() => { chatBox.scrollTop = chatBox.scrollHeight; }, 300));
+if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', () => { window.scrollTo(0, 0); chatBox.scrollTop = chatBox.scrollHeight; });
+}
+</script>
+</body>
+</html>
