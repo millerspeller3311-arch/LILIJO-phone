@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#f4f0e6">
+<title>一筒悲欢 · 月落归楼</title>
+<style>
+:root{font-family:"Songti SC","Noto Serif SC",serif;color:#30493f;background:#f4f0e6}*{box-sizing:border-box}body{margin:0;padding:34px 16px}main{max-width:650px;margin:auto}header{text-align:center;margin-bottom:24px}.sub{color:#8a8e7b;font-size:12px;letter-spacing:.14em}h1{font-size:clamp(30px,7vw,47px);letter-spacing:.15em;font-weight:500;margin:12px 0}.meta{display:flex;gap:10px;justify-content:center;color:#758677;font-size:13px;flex-wrap:wrap}.card{background:#fffcf5;border:1px solid #d6d2c3;border-radius:16px;padding:22px;box-shadow:0 8px 35px #33463810;margin:18px 0}button{cursor:pointer;border:0;border-radius:9px;padding:14px 18px;background:#2e5545;color:#fff7ec;font:700 17px "Songti SC",serif;letter-spacing:.13em}button:disabled{opacity:.5}button.secondary{font:14px system-ui,sans-serif;letter-spacing:0;background:#e3e8df;color:#3d5c4c;padding:10px 12px}.controls{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin:22px 0}.eyebrow{font:12px system-ui,sans-serif;color:#998777}.outcome{font-size:32px;margin:12px 0;color:#a2763f}.outcome.bad{color:#a05c55}.lot{background:#f4f3ed;border-radius:10px;padding:15px;margin:12px 0}.lot strong{display:block;font-size:20px;margin:0 0 5px}.lot p{margin:0;font-size:15px;line-height:1.8;color:#566e60}.fusion{border-top:1px solid #dddacf;margin-top:14px;padding-top:14px}.fusion b{color:#8a6142}.fusion p{line-height:1.85}.tip{color:#788a7c;font-size:13px;line-height:1.7}.history{list-style:none;padding:0;margin:0}.history li{border-bottom:1px solid #e7e2d6;padding:8px 0;font-size:14px}.history li:last-child{border:0}footer{text-align:center;color:#899587;font-size:12px;margin:30px 0}.error{color:#ad554b}.count{font:13px system-ui,sans-serif;color:#708075}a{color:#466d59} [hidden]{display:none!important}
+</style></head><body><main>
+<header><div class="sub">月 落 归 楼 · 故 事 推 进 器</div><h1>一 筒 悲 欢</h1><div class="meta"><span>喜签 60% · 坏签 40%</span><span>喜签 26 道 · 风波 12 道</span></div></header>
+<section class="card" aria-live="polite"><div class="eyebrow" id="status">正在读取 GitHub 签池…</div><div id="result"><h2 class="outcome">今日未抽签</h2><p class="tip">一念生欢喜，两波起风澜。按下摇签，抽出下一段故事的引线。</p></div><div class="controls"><button id="draw" disabled>摇 一 签</button><button id="copy" class="secondary" disabled>复制签文</button></div><p class="tip" id="odds">近期五次避重；连续三次同类后轻微偏向另一类，不保证轮换。</p></section>
+<section class="card"><div class="eyebrow">已抽记录 · 仅保存在当前浏览器</div><div class="controls"><button class="secondary" id="clear">清空记录</button><button class="secondary" id="export">复制完整记录</button></div><ol class="history" id="history"></ol></section>
+<footer>签池与规则：<a href="./pool.json">pool.json（AI 可直接读取）</a><p>静态抽签器，无服务器，不会自动同步不同设备或 AI 对话中的抽签记录。</p></footer>
+</main><script>
+(()=>{'use strict';
+const $=x=>document.getElementById(x), key="jiulou_lots_public_history_v1";
+let config=null, history=[], lastText="";
+try{const x=JSON.parse(localStorage.getItem(key)||"[]");if(Array.isArray(x))history=x.filter(a=>a&&["joy","trouble"].includes(a.type)).slice(-100);}catch(_){}
+const rand=()=>{if(window.crypto?.getRandomValues){const a=new Uint32Array(1);crypto.getRandomValues(a);return a[0]/4294967296;}return Math.random();};
+const one=a=>a[Math.floor(rand()*a.length)];
+const sig=(type,ids)=>type+":"+ids.slice().sort().join("+");
+const label=(r)=>r.type==="joy"?"喜签 "+r.ids[0]:"坏签 "+r.ids.join(" + ");
+const streak=()=>{let count=0;const type=history.at(-1)?.type;for(let i=history.length-1;i>=0&&history[i].type===type;i--)count++;return{count,type};};
+const chance=()=>{const {count,type}=streak();return count>=3?(type==="joy"?config.rules.joyChanceAfterJoyStreak:config.rules.joyChanceAfterTroubleStreak):config.rules.baseJoyProbability;};
+function renderHistory(){$("history").replaceChildren();for(const r of history.slice(-12).reverse()){const li=document.createElement("li");li.textContent=label(r)+" · "+r.titles.join(" ＋ ");$("history").append(li);}$("odds").textContent="下一签：喜 "+Math.round(chance()*100)+"% · 坏 "+Math.round((1-chance())*100)+"% ｜近五次避重；三连柔性纠偏。";}
+function draw(){
+const type=rand()<chance()?"joy":"trouble", recent=new Set(history.slice(-5).map(r=>sig(r.type,r.ids)));
+let candidates=[];
+if(type==="joy")candidates=config.joy.map(a=>[a]);else for(let i=0;i<config.trouble.length;i++)for(let j=i+1;j<config.trouble.length;j++)candidates.push([config.trouble[i],config.trouble[j]]);
+const unseen=candidates.filter(a=>!recent.has(sig(type,a.map(x=>x.id))));
+const prior=new Set(history.filter(r=>r.type===type).map(r=>sig(r.type,r.ids)));
+const fresh=unseen.filter(a=>!prior.has(sig(type,a.map(x=>x.id))));
+const selected=one(fresh.length?fresh:unseen.length?unseen:candidates);
+const f=type==="trouble"?one(config.fusions):null;
+const desc=f?f.template.replaceAll("{a}",selected[0].title).replaceAll("{b}",selected[1].title):"";
+const item={type,ids:selected.map(x=>x.id),titles:selected.map(x=>x.title),fusion:f?.title||null,ts:new Date().toISOString()};
+history.push(item);history=history.slice(-100);try{localStorage.setItem(key,JSON.stringify(history));}catch(_){}
+$("result").replaceChildren();const head=document.createElement("h2");head.className="outcome"+(type==="trouble"?" bad":"");head.textContent=type==="joy"?"喜签 · 欢喜临门":"坏签 · 双波相撞";$("result").append(head);
+lastText=head.textContent+"\n";
+selected.forEach((x,i)=>{const b=document.createElement("div");b.className="lot";const strong=document.createElement("strong"),p=document.createElement("p");strong.textContent=(type==="joy"?"":i===0?"起波 · ":"添澜 · ")+x.title;p.textContent=x.description;b.append(strong,p);$("result").append(b);lastText+="【"+strong.textContent+"】"+x.description+"\n";});
+if(f){const b=document.createElement("div");b.className="fusion";const s=document.createElement("b"),p=document.createElement("p");s.textContent="合签 · "+f.title;p.textContent=desc;b.append(s,p);$("result").append(b);lastText+="【"+s.textContent+"】"+desc+"\n";}
+const p=document.createElement("p");p.className="tip";p.textContent="此签仅提供剧情引线，不预设人物选择或结局。";$("result").append(p);$("status").textContent="签号："+item.ids.join(" / ")+" · "+(f?.id||"单签");$("copy").disabled=false;renderHistory();
+}
+$("draw").onclick=draw;$("copy").onclick=()=>navigator.clipboard.writeText(lastText).then(()=>$("copy").textContent="已复制").catch(()=>$("copy").textContent="请手动复制");
+$("clear").onclick=()=>{history=[];try{localStorage.removeItem(key)}catch(_){}renderHistory();};
+$("export").onclick=()=>navigator.clipboard.writeText(JSON.stringify(history,null,2));
+fetch("./pool.json",{cache:"no-store"}).then(r=>{if(!r.ok)throw Error("HTTP "+r.status);return r.json()}).then(j=>{if(j.joy.length<1||j.trouble.length<2)throw Error("签池不完整");config=j;$("draw").disabled=false;$("status").textContent="签池已就绪 · "+j.version;renderHistory();}).catch(e=>{$("status").textContent="签池读取失败："+e.message;$("status").className="error";});
+})();
+</script></body></html>
